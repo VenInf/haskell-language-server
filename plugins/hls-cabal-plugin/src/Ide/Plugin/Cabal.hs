@@ -48,7 +48,9 @@ import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                            as VFS
 
-import Debug.Trace
+import qualified Data.Text                                   ()
+import           Debug.Trace
+import qualified Ide.Plugin.Cabal.CabalAdd                   as CabalAdd
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -103,7 +105,6 @@ descriptor recorder plId =
     , pluginHandlers =
         mconcat
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction licenseSuggestCodeAction
-          -- , mkPluginHandler LSP.SMethod_TextDocumentCodeAction cabalAddCodeAction
           , mkPluginHandler LSP.SMethod_TextDocumentCompletion $ completion recorder
           , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
           ]
@@ -291,10 +292,12 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
       pure $ FieldSuggest.fieldErrorAction uri fieldName completionTexts _range
 
 cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
-cabalAddCodeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
-    let diags = context ^. JL.diagnostics
-    traceShowM ("cabalAddCodeAction diags ", diags)
-    pure $ InL []
+cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
+  maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal-plugin.cabalAdd" state getClientConfigAction
+  -- traceShowM ("cabalAddCodeAction maxCompls", maxCompls, "diags", diags)
+  let suggest d = CabalAdd.missingDependenciesSuggestion maxCompls (Diagnostics._message d)
+  -- traceShowM ("CabalAdd.missingDependenciesAction", map suggest diags)
+  pure $ InL $ diags >>= (fmap InR . CabalAdd.missingDependenciesAction maxCompls uri)
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
