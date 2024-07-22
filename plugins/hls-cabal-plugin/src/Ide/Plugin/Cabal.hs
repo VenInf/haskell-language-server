@@ -51,7 +51,6 @@ import qualified Language.LSP.VFS                            as VFS
 import qualified Data.Text                                   ()
 import qualified Ide.Plugin.Cabal.CabalAdd                   as CabalAdd
 import Debug.Trace
-import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -295,7 +294,7 @@ fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentif
 
 cabalAddCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
-  maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal-plugin.cabalAdd" state getClientConfigAction
+  maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal.cabal-add" state getClientConfigAction
 
   let mbHaskellFilePath = uriToFilePath uri
   case mbHaskellFilePath of
@@ -305,7 +304,7 @@ cabalAddCodeAction recorder state plId (CodeActionParams _ _ (TextDocumentIdenti
       case mbCabalFile of
         Nothing -> pure $ InL $ fmap InR [noCabalFileAction]
         Just cabalFilePath -> do
-          mGPD <- liftIO $ runIdeAction "cabal-plugin.modulesCompleter.gpd" (shakeExtras state) $ useWithStaleFast ParseCabalFile $ toNormalizedFilePath cabalFilePath
+          mGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
           case mGPD of
             Nothing -> pure $ InL []
             Just (gpd, _) -> do
