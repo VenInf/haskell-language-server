@@ -25,6 +25,8 @@ import           System.FilePath
 import           Test.Hls
 import           Utils
 
+import Debug.Trace
+
 main :: IO ()
 main = do
     defaultTestRunner $
@@ -218,13 +220,25 @@ codeActionTests = testGroup "Code Actions"
                     ]) cas
         mapM_ executeCodeAction selectedCas
         pure ()
-        , runCabalTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "hidden-package") $ do
+    , runHaskellTestCaseSession "test that haskell files are read" ("cabal-add-testdata" </> "hidden-package") $ do
         doc <- openDoc ("src" </> "Main.hs") "haskell"
+
         _ <- waitForDiagnosticsFromSource doc "haskell"
         cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions doc
         let selectedCas = nubOrdOn (^. L.title) $ filter
                 (\ca -> (ca ^. L.title) == "Add dependency") cas
         mapM_ executeCodeAction selectedCas
+        liftIO $ assertEqual "Split isn't found in the cabal file" (show selectedCas) []
+    , runCabalTestCaseSession "Code Actions - Can add hidden package" ("cabal-add-testdata" </> "hidden-package") $ do
+        _ <- liftIO $ runHaskellSession ("cabal-add-testdata" </> "hidden-package") $ do
+                doc <- openDoc ("src" </> "Main.hs") "haskell"
+
+                _ <- waitForDiagnosticsFromSource doc "haskell"
+                cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions doc
+                let selectedCas = nubOrdOn (^. L.title) $ filter
+                        (\ca -> (ca ^. L.title) == "Add dependency") cas
+                mapM_ executeCodeAction selectedCas
+                pure ()
 
         doc <- openDoc "hidden-package.cabal" "cabal"
         contents <- documentContents doc
@@ -236,3 +250,4 @@ codeActionTests = testGroup "Code Actions"
         InR action@CodeAction{_title} <- codeActions
         guard (_title == "Replace with " <> license)
         pure action
+
